@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/TakuyaYagam1/go-cachekit"
-	"github.com/TakuyaYagam1/go-httpkit/httputil/middleware"
-	"github.com/TakuyaYagam1/go-logkit"
-	"github.com/TakuyaYagam1/go-wskit"
+	"github.com/takuya-go-kit/go-cachekit"
+	"github.com/takuya-go-kit/go-httpkit/httputil/middleware"
+	"github.com/takuya-go-kit/go-logkit"
+	"github.com/takuya-go-kit/go-wskit"
 	"github.com/go-chi/chi/v5"
 )
 

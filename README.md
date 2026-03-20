@@ -8,12 +8,12 @@ Each kit is an independent module with its own versioning, CI, and minimal depen
 
 | Kit | Description | Version |
 |-----|-------------|---------|
-| [go-logkit](https://github.com/TakuyaYagam1/go-logkit) | Structured logging (zerolog) | [![Go Reference](https://pkg.go.dev/badge/github.com/TakuyaYagam1/go-logkit.svg)](https://pkg.go.dev/github.com/TakuyaYagam1/go-logkit) |
-| [go-httpkit](https://github.com/TakuyaYagam1/go-httpkit) | HTTP middleware, error handling, health checks (chi-first) | [![Go Reference](https://pkg.go.dev/badge/github.com/TakuyaYagam1/go-httpkit.svg)](https://pkg.go.dev/github.com/TakuyaYagam1/go-httpkit) |
-| [go-pgkit](https://github.com/TakuyaYagam1/go-pgkit) | PostgreSQL pool, migrations, error helpers (pgx) | [![Go Reference](https://pkg.go.dev/badge/github.com/TakuyaYagam1/go-pgkit.svg)](https://pkg.go.dev/github.com/TakuyaYagam1/go-pgkit) |
-| [go-jwtkit](https://github.com/TakuyaYagam1/go-jwtkit) | JWT auth — symmetric & asymmetric, middleware, revocation | [![Go Reference](https://pkg.go.dev/badge/github.com/TakuyaYagam1/go-jwtkit.svg)](https://pkg.go.dev/github.com/TakuyaYagam1/go-jwtkit) |
-| [go-cachekit](https://github.com/TakuyaYagam1/go-cachekit) | Redis cache with singleflight, KV store, Pub/Sub | [![Go Reference](https://pkg.go.dev/badge/github.com/TakuyaYagam1/go-cachekit.svg)](https://pkg.go.dev/github.com/TakuyaYagam1/go-cachekit) |
-| [go-wskit](https://github.com/TakuyaYagam1/go-wskit) | WebSocket hub with Redis Pub/Sub scaling (coder/websocket) | [![Go Reference](https://pkg.go.dev/badge/github.com/TakuyaYagam1/go-wskit.svg)](https://pkg.go.dev/github.com/TakuyaYagam1/go-wskit) |
+| [go-logkit](https://github.com/takuya-go-kit/go-logkit) | Structured logging (zerolog) | [![Go Reference](https://pkg.go.dev/badge/github.com/takuya-go-kit/go-logkit.svg)](https://pkg.go.dev/github.com/takuya-go-kit/go-logkit) |
+| [go-httpkit](https://github.com/takuya-go-kit/go-httpkit) | HTTP middleware, error handling, health checks (chi-first) | [![Go Reference](https://pkg.go.dev/badge/github.com/takuya-go-kit/go-httpkit.svg)](https://pkg.go.dev/github.com/takuya-go-kit/go-httpkit) |
+| [go-pgkit](https://github.com/takuya-go-kit/go-pgkit) | PostgreSQL pool, migrations, error helpers (pgx) | [![Go Reference](https://pkg.go.dev/badge/github.com/takuya-go-kit/go-pgkit.svg)](https://pkg.go.dev/github.com/takuya-go-kit/go-pgkit) |
+| [go-jwtkit](https://github.com/takuya-go-kit/go-jwtkit) | JWT auth — symmetric & asymmetric, middleware, revocation | [![Go Reference](https://pkg.go.dev/badge/github.com/takuya-go-kit/go-jwtkit.svg)](https://pkg.go.dev/github.com/takuya-go-kit/go-jwtkit) |
+| [go-cachekit](https://github.com/takuya-go-kit/go-cachekit) | Redis cache with singleflight, KV store, Pub/Sub | [![Go Reference](https://pkg.go.dev/badge/github.com/takuya-go-kit/go-cachekit.svg)](https://pkg.go.dev/github.com/takuya-go-kit/go-cachekit) |
+| [go-wskit](https://github.com/takuya-go-kit/go-wskit) | WebSocket hub with Redis Pub/Sub scaling (coder/websocket) | [![Go Reference](https://pkg.go.dev/badge/github.com/takuya-go-kit/go-wskit.svg)](https://pkg.go.dev/github.com/takuya-go-kit/go-wskit) |
 
 ## Dependency Graph
 
@@ -30,12 +30,12 @@ graph LR
 ## Quick Start
 
 ```bash
-go get github.com/TakuyaYagam1/go-logkit@latest
-go get github.com/TakuyaYagam1/go-httpkit@latest
-go get github.com/TakuyaYagam1/go-pgkit@latest
-go get github.com/TakuyaYagam1/go-jwtkit@latest
-go get github.com/TakuyaYagam1/go-cachekit@latest
-go get github.com/TakuyaYagam1/go-wskit@latest
+go get github.com/takuya-go-kit/go-logkit@latest
+go get github.com/takuya-go-kit/go-httpkit@latest
+go get github.com/takuya-go-kit/go-pgkit@latest
+go get github.com/takuya-go-kit/go-jwtkit@latest
+go get github.com/takuya-go-kit/go-cachekit@latest
+go get github.com/takuya-go-kit/go-wskit@latest
 ```
 
 Minimal chi server with logging, JWT auth, PostgreSQL and Redis cache:
