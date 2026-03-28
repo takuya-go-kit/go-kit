@@ -1,3 +1,4 @@
+// Package main demonstrates a real-time WebSocket + SSE broadcast server using chi and go-wskit
 package main
 
 import (
@@ -42,13 +43,24 @@ func main() {
 	defer rdb.Close()
 
 	hub := wskit.NewHub(
+		// Redis Pub/Sub - enables broadcast across multiple server instances.
 		wskit.WithRedis(rdb, "ws:events"),
-		wskit.WithOnConnect(func(c *wskit.Client) {
+		// Larger broadcast buffer for high-throughput scenarios.
+		wskit.WithBroadcastBuf(256),
+		// Per-operation channel timeout (register / unregister / broadcast).
+		wskit.WithChannelTimeout(100*time.Millisecond),
+		wskit.WithOnTimeout(func(op string) {
+			log.Warn("hub channel timeout", logkit.Fields{"op": op})
+		}),
+		wskit.WithOnConnect(func(s wskit.Subscriber) {
 			data, _ := json.Marshal(wskit.NewEvent("welcome", map[string]string{
 				"message": "connected to realtime server",
 			}))
-			c.Send(data)
-			log.Debug("client connected", logkit.Component("hub"))
+			s.Send(data)
+			log.Debug("subscriber connected", logkit.Component("hub"))
+		}),
+		wskit.WithOnDisconnect(func(s wskit.Subscriber) {
+			log.Debug("subscriber disconnected", logkit.Component("hub"))
 		}),
 	)
 
@@ -61,8 +73,14 @@ func main() {
 	r.Use(middleware.Logger(log, nil))
 	r.Use(middleware.Recoverer(log))
 
+	// WebSocket endpoint - full-duplex, suitable for interactive clients.
 	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
-		client, err := wskit.Accept(r.Context(), w, r, hub, nil)
+		// nil = default websocket.AcceptOptions; ClientOptions follow.
+		client, err := wskit.Accept(r.Context(), w, r, hub, nil,
+			wskit.WithWriteWait(10*time.Second),
+			wskit.WithPingInterval(30*time.Second),
+			wskit.WithMaxMessageSize(4096),
+		)
 		if err != nil {
 			log.Warn("ws accept failed", logkit.Error(err))
 			return
@@ -71,6 +89,15 @@ func main() {
 		go client.WritePump()
 	})
 
+	// SSE endpoint - server-to-client only, works through HTTP/1.1 proxies without upgrade.
+	r.Get("/events", func(w http.ResponseWriter, r *http.Request) {
+		if err := wskit.AcceptSSE(w, r, hub); err != nil && !errors.Is(err, context.Canceled) {
+			log.Warn("sse error", logkit.Error(err))
+		}
+	})
+
+	// Broadcast an event to all connected subscribers (WebSocket + SSE).
+	// BroadcastEvent wraps the payload in a typed Event envelope before publishing.
 	r.Post("/broadcast", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Type    string `json:"type"`
@@ -80,17 +107,17 @@ func main() {
 			http.Error(w, "invalid body", http.StatusBadRequest)
 			return
 		}
-		if err := hub.BroadcastJSON(r.Context(), req.Type, req.Payload); err != nil {
+		if err := hub.BroadcastEvent(r.Context(), wskit.NewEvent(req.Type, req.Payload)); err != nil {
 			http.Error(w, "broadcast failed", http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	r.Get("/stats", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/stats", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]int{
-			"connected_clients": hub.ClientCount(),
+			"connected_subscribers": hub.SubscriberCount(),
 		})
 	})
 

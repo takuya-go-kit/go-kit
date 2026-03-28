@@ -1,3 +1,4 @@
+// Package main demonstrates a real-time WebSocket broadcast server using Gin and go-wskit
 package main
 
 import (
@@ -42,11 +43,11 @@ func main() {
 
 	hub := wskit.NewHub(
 		wskit.WithRedis(rdb, "ws:events"),
-		wskit.WithOnConnect(func(c *wskit.Client) {
+		wskit.WithOnConnect(func(s wskit.Subscriber) {
 			data, _ := json.Marshal(wskit.NewEvent("welcome", map[string]string{
 				"message": "connected to realtime server",
 			}))
-			c.Send(data)
+			s.Send(data)
 			log.Debug("client connected", logkit.Component("hub"))
 		}),
 	)
@@ -85,7 +86,7 @@ func main() {
 
 	r.GET("/stats", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"connected_clients": hub.ClientCount(),
+			"connected_subscribers": hub.SubscriberCount(),
 		})
 	})
 

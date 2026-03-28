@@ -6,7 +6,7 @@ All benchmarks collected on:
 goos:   linux
 goarch: amd64
 cpu:    AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
-go:     1.25
+go:     1.26
 ```
 
 ## go-wskit

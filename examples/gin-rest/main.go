@@ -1,3 +1,4 @@
+// Package main demonstrates a REST API server using Gin and go-kit libraries
 package main
 
 import (
