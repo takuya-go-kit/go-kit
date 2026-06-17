@@ -19,9 +19,9 @@ Each kit is an independent module with its own versioning, CI, and minimal depen
 
 ```mermaid
 graph LR
-    httpkit ->  logkit
-    jwtkit ->  logkit
-    wskit ->  cachekit
+    httpkit --> logkit
+    jwtkit --> logkit
+    wskit --> cachekit
     pgkit
     cachekit
     logkit
