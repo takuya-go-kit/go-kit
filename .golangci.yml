@@ -12,6 +12,7 @@ linters:
     - exhaustruct
     - err113
     - testpackage
+    - gomodguard
     - nlreturn
     - noinlineerr
     - inamedparam

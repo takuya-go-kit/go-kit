@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,6 +20,7 @@ import (
 	"github.com/wahrwelt-kit/go-wskit"
 )
 
+//nolint:funlen
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -32,6 +34,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "logger: %v\n", err)
 		os.Exit(1)
 	}
+	slogLog := slog.New(logkit.SlogHandler(log))
 
 	rdb, err := cachekit.NewRedisClient(ctx, &cachekit.RedisConfig{
 		Host: env("REDIS_HOST", "localhost"),
@@ -59,7 +62,7 @@ func main() {
 			s.Send(data)
 			log.Debug("subscriber connected", logkit.Component("hub"))
 		}),
-		wskit.WithOnDisconnect(func(s wskit.Subscriber) {
+		wskit.WithOnDisconnect(func(_ wskit.Subscriber) {
 			log.Debug("subscriber disconnected", logkit.Component("hub"))
 		}),
 	)
@@ -70,8 +73,8 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID())
-	r.Use(middleware.Logger(log, nil))
-	r.Use(middleware.Recoverer(log))
+	r.Use(middleware.Logger(slogLog, nil))
+	r.Use(middleware.Recoverer(slogLog))
 
 	// WebSocket endpoint - full-duplex, suitable for interactive clients.
 	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {

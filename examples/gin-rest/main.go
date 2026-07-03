@@ -27,6 +27,8 @@ type User struct {
 	Email string    `json:"email"`
 }
 
+const errorKey = "error"
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -121,12 +123,12 @@ func ginJWTAuth(svc *jwtkit.JWTService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		raw := jwtkit.ExtractRaw(c.Request)
 		if raw == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{errorKey: "missing or invalid token"})
 			return
 		}
 		claims, err := svc.ValidateAccessToken(c.Request.Context(), raw)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{errorKey: "invalid token"})
 			return
 		}
 		ctx := jwtkit.ClaimsIntoContext(c.Request.Context(), claims)
@@ -142,17 +144,17 @@ func ginLogin(jwtSvc *jwtkit.JWTService) gin.HandlerFunc {
 			Role   string `json:"role"    binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			c.JSON(http.StatusBadRequest, gin.H{errorKey: "invalid request body"})
 			return
 		}
 		uid, err := uuid.Parse(req.UserID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
+			c.JSON(http.StatusBadRequest, gin.H{errorKey: "invalid user_id"})
 			return
 		}
 		pair, err := jwtSvc.GenerateTokenPair(c.Request.Context(), uid, req.Role)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
+			c.JSON(http.StatusInternalServerError, gin.H{errorKey: "token generation failed"})
 			return
 		}
 		c.JSON(http.StatusOK, pair)
@@ -163,7 +165,7 @@ func ginGetUser(pool *pgxpool.Pool, cache *cachekit.Cache) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(c.Param("id"))
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			c.JSON(http.StatusBadRequest, gin.H{errorKey: "invalid id"})
 			return
 		}
 		user, loadErr := cachekit.GetOrLoad(cache, c.Request.Context(), fmt.Sprintf("user:%s", id), 5*time.Minute, func(ctx context.Context) (User, error) {
@@ -173,10 +175,10 @@ func ginGetUser(pool *pgxpool.Pool, cache *cachekit.Cache) gin.HandlerFunc {
 		})
 		if loadErr != nil {
 			if pgutil.IsNoRows(loadErr) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+				c.JSON(http.StatusNotFound, gin.H{errorKey: "user not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+			c.JSON(http.StatusInternalServerError, gin.H{errorKey: "failed to load user"})
 			return
 		}
 		c.JSON(http.StatusOK, user)

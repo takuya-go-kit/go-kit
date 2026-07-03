@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -42,6 +43,7 @@ type AppConfig struct {
 	Version         string `json:"version"`
 }
 
+//nolint:funlen
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -55,6 +57,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "logger: %v\n", err)
 		os.Exit(1)
 	}
+	slogLog := slog.New(logkit.SlogHandler(log))
 
 	pool, err := postgres.New(ctx, &postgres.Config{
 		URL:      env("DATABASE_URL", "postgres://app:app@localhost:5432/app?sslmode=disable"),
@@ -123,12 +126,12 @@ func main() {
 
 	r.Use(middleware.RequestID())
 	r.Use(clientIP)
-	r.Use(middleware.Logger(log, nil))
-	r.Use(middleware.Recoverer(log))
+	r.Use(middleware.Logger(slogLog, nil))
+	r.Use(middleware.Recoverer(slogLog))
 	r.Use(middleware.SecurityHeaders())
 	// Prometheus: http_requests_total + http_request_duration_seconds.
 	// chiPathFromRequest returns stable route pattern (/users/{id}) to avoid cardinality explosion.
-	r.Use(metrics.Middleware(nil, chiPathFromRequest, metrics.WithLogger(log)))
+	r.Use(metrics.Middleware(nil, chiPathFromRequest, metrics.WithLogger(slogLog)))
 	// Per-request deadline for database, cache, RPC, and other context-aware calls.
 	r.Use(middleware.ContextTimeout(10 * time.Second))
 	// Language resolution: cookie "lang" -> ?lang= -> Accept-Language header -> English default.
@@ -153,7 +156,7 @@ func main() {
 	r.Post("/auth/login", loginHandler(jwtSvc))
 
 	r.Group(func(r chi.Router) {
-		r.Use(jwtkit.JWTAuth(jwtSvc, jwtkit.WithLogger(log)))
+		r.Use(jwtkit.JWTAuth(jwtSvc, jwtkit.WithLogger(slogLog)))
 
 		// GET /config - CachedValue: result is singleflighted and refreshed every minute.
 		r.Get("/config", configHandler(appConfig))
@@ -208,7 +211,7 @@ func loginHandler(jwtSvc *jwtkit.JWTService) http.HandlerFunc {
 
 func configHandler(cfg *cachekit.CachedValue[AppConfig]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		config, err := cfg.Get(r.Context(), func(ctx context.Context) (AppConfig, error) {
+		config, err := cfg.Get(r.Context(), func(_ context.Context) (AppConfig, error) {
 			// In production: SELECT maintenance_mode, version FROM settings LIMIT 1
 			return AppConfig{MaintenanceMode: false, Version: "1.0.0"}, nil
 		})

@@ -41,15 +41,17 @@ go get github.com/wahrwelt-kit/go-wskit@latest
 Minimal chi server with logging, JWT auth, PostgreSQL and Redis cache:
 
 ```go
+slogLog := slog.New(logkit.SlogHandler(log))
+
 r := chi.NewRouter()
 r.Use(middleware.RequestID())
-r.Use(middleware.Logger(log, nil))
-r.Use(middleware.Recoverer(log))
+r.Use(middleware.Logger(slogLog, nil))
+r.Use(middleware.Recoverer(slogLog))
 
 r.Get("/health", httputil.HealthHandler(nil))
 
 r.Group(func(r chi.Router) {
-    r.Use(jwtkit.JWTAuth(jwtSvc, jwtkit.WithLogger(log)))
+    r.Use(jwtkit.JWTAuth(jwtSvc, jwtkit.WithLogger(slogLog)))
     r.Get("/users/{id}", getUserHandler(pool, cache))
 })
 ```
