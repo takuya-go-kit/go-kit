@@ -22,6 +22,8 @@ import (
 	"github.com/wahrwelt-kit/go-cachekit"
 	"github.com/wahrwelt-kit/go-httpkit/httputil"
 	"github.com/wahrwelt-kit/go-httpkit/httputil/middleware"
+	"github.com/wahrwelt-kit/go-httpkit/localization"
+	"github.com/wahrwelt-kit/go-httpkit/metrics"
 	"github.com/wahrwelt-kit/go-jwtkit"
 	"github.com/wahrwelt-kit/go-logkit"
 	"github.com/wahrwelt-kit/go-pgkit/pgutil"
@@ -74,15 +76,17 @@ func main() {
 
 	cache := cachekit.New(rdb)
 
-	// LRFUCache - in-memory L1 cache (hot users), 1 000 entries max.
+	// SieveCache - in-memory L1 cache (hot users), 1 000 entries max.
 	// Falls through to Redis+DB on miss via GetOrLoad.
-	lrfu := cachekit.NewLRFUCache[uuid.UUID, User](1000)
+	l1 := cachekit.NewSieveCache[uuid.UUID, User](1000)
 
 	// CachedValue - single app config reloaded every minute with singleflight.
-	appConfig := cachekit.NewCachedValue[AppConfig](ctx, "app:config", time.Minute,
+	appConfig, err := cachekit.NewCachedValue[AppConfig]("app:config", time.Minute,
 		cachekit.WithLoadTimeout(5*time.Second),
 	)
-	defer appConfig.Stop()
+	if err != nil {
+		log.Fatal("cached config", logkit.Error(err))
+	}
 
 	jwtSvc, err := jwtkit.NewJWTService(jwtkit.Config{
 		AccessKeys:  []jwtkit.KeyEntry{{Kid: "1", Secret: []byte(env("JWT_SECRET", "change-me-32-bytes-long-secret!!"))}},
@@ -121,25 +125,25 @@ func main() {
 	r.Use(clientIP)
 	r.Use(middleware.Logger(log, nil))
 	r.Use(middleware.Recoverer(log))
-	r.Use(middleware.SecurityHeaders(false))
+	r.Use(middleware.SecurityHeaders())
 	// Prometheus: http_requests_total + http_request_duration_seconds.
-	// ChiPathFromRequest returns stable route pattern (/users/{id}) to avoid cardinality explosion.
-	r.Use(middleware.Metrics(nil, httputil.ChiPathFromRequest, log))
-	// Per-request timeout - handlers that exceed 10 s get a 503.
-	r.Use(middleware.Timeout(10*time.Second, log))
+	// chiPathFromRequest returns stable route pattern (/users/{id}) to avoid cardinality explosion.
+	r.Use(metrics.Middleware(nil, chiPathFromRequest, metrics.WithLogger(log)))
+	// Per-request deadline for database, cache, RPC, and other context-aware calls.
+	r.Use(middleware.ContextTimeout(10 * time.Second))
 	// Language resolution: cookie "lang" -> ?lang= -> Accept-Language header -> English default.
-	r.Use(middleware.I18n(bundle,
-		middleware.WithLanguageCookie("lang"),
-		middleware.WithLanguageQueryParam("lang"),
+	r.Use(localization.Middleware(bundle,
+		localization.WithLanguageCookie("lang"),
+		localization.WithLanguageQueryParam("lang"),
 	))
 
 	r.Get("/health", httputil.HealthHandler(nil))
 	// Expose Prometheus metrics.
 	r.Get("/metrics", promhttp.Handler().ServeHTTP)
 
-	// Localised greeting - shows I18n middleware in action.
+	// Localised greeting - shows localization middleware in action.
 	r.Get("/hello", func(w http.ResponseWriter, r *http.Request) {
-		greeting := middleware.Localize(r.Context(), &i18n.LocalizeConfig{
+		greeting := localization.Localize(r.Context(), &i18n.LocalizeConfig{
 			MessageID:      "greeting",
 			DefaultMessage: &i18n.Message{ID: "greeting", Other: "Hello"},
 		})
@@ -154,8 +158,8 @@ func main() {
 		// GET /config - CachedValue: result is singleflighted and refreshed every minute.
 		r.Get("/config", configHandler(appConfig))
 
-		// GET /users/{id} - L1 LRFUCache -> L2 Redis (GetOrLoad) -> Postgres.
-		r.Get("/users/{id}", getUserHandler(pool, cache, lrfu))
+		// GET /users/{id} - L1 SieveCache -> L2 Redis (GetOrLoad) -> Postgres.
+		r.Get("/users/{id}", getUserHandler(pool, cache, l1))
 
 		// GET /users/{id}/export - streams the user record as a downloadable JSON file.
 		r.Get("/users/{id}/export", exportUserHandler(pool, cache))
@@ -216,15 +220,26 @@ func configHandler(cfg *cachekit.CachedValue[AppConfig]) http.HandlerFunc {
 	}
 }
 
-func getUserHandler(pool *pgxpool.Pool, cache *cachekit.Cache, lrfu *cachekit.LRFUCache[uuid.UUID, User]) http.HandlerFunc {
+func chiPathFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	rctx := chi.RouteContext(r.Context())
+	if rctx == nil {
+		return ""
+	}
+	return rctx.RoutePattern()
+}
+
+func getUserHandler(pool *pgxpool.Pool, cache *cachekit.Cache, l1 *cachekit.SieveCache[uuid.UUID, User]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := httputil.ParseUUIDField(w, r, chi.URLParam(r, "id"), "id")
 		if !ok {
 			return
 		}
 
-		// L1: in-memory LRFU - O(1) hit, no network hop.
-		if user, ok := lrfu.Get(id); ok {
+		// L1: in-memory SIEVE - cheap hit path, no network hop.
+		if user, ok := l1.Get(id); ok {
 			httputil.RenderJSON(w, r, http.StatusOK, user)
 			return
 		}
@@ -236,7 +251,7 @@ func getUserHandler(pool *pgxpool.Pool, cache *cachekit.Cache, lrfu *cachekit.LR
 			return u, err
 		})
 		if err != nil {
-			notFoundMsg := middleware.Localize(r.Context(), &i18n.LocalizeConfig{
+			notFoundMsg := localization.Localize(r.Context(), &i18n.LocalizeConfig{
 				MessageID:      "user_not_found",
 				DefaultMessage: &i18n.Message{ID: "user_not_found", Other: "User not found"},
 			})
@@ -248,7 +263,7 @@ func getUserHandler(pool *pgxpool.Pool, cache *cachekit.Cache, lrfu *cachekit.LR
 			return
 		}
 
-		lrfu.Set(id, user)
+		l1.Set(id, user)
 		httputil.RenderJSON(w, r, http.StatusOK, user)
 	}
 }
